@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from datetime import datetime
 import streamlit as st
+from scipy.sparse import csr_matrix
 
 # Load the rating matrix from a CSV file
 # This matrix contains users as rows and movies as columns
@@ -23,13 +24,13 @@ def compute_similarity(matrix):
     Calculates how similar each pair of movies is based on user ratings.
     The similarity values are transformed to the range [0, 1] for convenience.
     """
-    movie_matrix = matrix.T  # Transpose to make rows as movies
-    similarity = pd.DataFrame(
-        cosine_similarity(movie_matrix.fillna(0)),
-        index=movie_matrix.index,
-        columns=movie_matrix.index
+    movie_matrix = csr_matrix(matrix.fillna(0).T)  # Convert to sparse format
+    similarity = cosine_similarity(movie_matrix)
+    return pd.DataFrame(
+        (1 + similarity) / 2,  # Transform similarity to [0, 1]
+        index=matrix.columns,
+        columns=matrix.columns
     )
-    return (1 + similarity) / 2  # Transform similarity to [0, 1]
 
 # Step 3: Filter low-count similarities
 def filter_low_counts(similarity_matrix, rating_matrix, min_shared=3):
@@ -39,9 +40,8 @@ def filter_low_counts(similarity_matrix, rating_matrix, min_shared=3):
     """
     movie_matrix = rating_matrix.T.notna().astype(int)
     shared_counts = movie_matrix.T @ movie_matrix
-    filtered = similarity_matrix.copy()
-    filtered[shared_counts < min_shared] = np.nan
-    return filtered
+    mask = shared_counts >= min_shared
+    return similarity_matrix.where(mask, np.nan)
 
 # Step 4: Keep top 30 similarities
 def top_k_similarity(sim_matrix, k=30):
@@ -49,8 +49,14 @@ def top_k_similarity(sim_matrix, k=30):
     Keep only the top-k similarities for each movie.
     Reduces computational complexity and focuses on the most relevant similarities.
     """
-    return sim_matrix.apply(
-        lambda row: row[row.nlargest(k).index].reindex(sim_matrix.columns, fill_value=np.nan), axis=1
+    indices = np.argsort(-sim_matrix.values, axis=1)[:, :k]
+    mask = np.zeros_like(sim_matrix.values, dtype=bool)
+    rows = np.arange(sim_matrix.shape[0])[:, None]
+    mask[rows, indices] = True
+    return pd.DataFrame(
+        np.where(mask, sim_matrix.values, np.nan),
+        index=sim_matrix.index,
+        columns=sim_matrix.columns
     )
 
 # Step 5: Define the myIBCF function
