@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 
 # Load similarity matrix
-def load_similarity_matrix(url):
-    return pd.read_csv(url, index_col=0)
+def load_similarity_matrix_local():
+    return pd.read_csv("s_matrix_top30.csv", index_col=0)
 
 # Recommendation function
 def myIBCF(new_user_ratings, similarity_matrix, top_n=10):
@@ -37,9 +37,8 @@ def main():
     st.title("Movie Recommender System")
 
     # Load the similarity matrix
-    sim_matrix_url = "https://github.com/yh12chang/Cs_598_PSL_Project_4/raw/refs/heads/main/s_matrix_top30.csv"
     st.write("Loading similarity matrix...")
-    similarity_matrix = load_similarity_matrix(sim_matrix_url)
+    similarity_matrix = load_similarity_matrix_local()
 
     # Load sample movies
     movie_titles = similarity_matrix.index.tolist()[:100]  # Display only 100 movies
