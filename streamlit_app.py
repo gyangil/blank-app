@@ -7,7 +7,12 @@ from scipy.sparse import csr_matrix
 
 # Load the rating matrix from a CSV file
 # This matrix contains users as rows and movies as columns
-rating_matrix = pd.read_csv("rating_matrix.csv", index_col=0)  # Assuming rows are users, columns are movies
+try:
+    rating_matrix = pd.read_csv("rating_matrix.csv", index_col=0)  # Assuming rows are users, columns are movies
+    st.write("Rating matrix loaded successfully.")
+except FileNotFoundError:
+    st.error("rating_matrix.csv not found. Please ensure the file is in the correct directory.")
+    st.stop()
 
 # Step 1: Normalize the rating matrix
 def normalize_matrix(matrix):
@@ -66,27 +71,35 @@ def myIBCF(new_user_ratings, similarity_matrix, max_movies=100):
     Limit the similarity matrix to only `max_movies` columns to save memory.
     Predictions are made based on the similarity scores and the ratings provided by the user.
     """
-    limited_similarity = similarity_matrix.iloc[:, :max_movies]
-    predictions = {}
-    for movie in limited_similarity.index:
-        sim_scores = limited_similarity[movie].dropna()
-        rated_movies = new_user_ratings[new_user_ratings.notna()]
-        overlapping_movies = sim_scores.index.intersection(rated_movies.index)
-        if overlapping_movies.empty:
-            predictions[movie] = np.nan
-        else:
-            weights = sim_scores[overlapping_movies]
-            ratings = rated_movies[overlapping_movies]
-            predictions[movie] = (weights @ ratings) / weights.sum()
-    return pd.Series(predictions)
+    try:
+        limited_similarity = similarity_matrix.iloc[:, :max_movies]
+        predictions = {}
+        for movie in limited_similarity.index:
+            sim_scores = limited_similarity[movie].dropna()
+            rated_movies = new_user_ratings[new_user_ratings.notna()]
+            overlapping_movies = sim_scores.index.intersection(rated_movies.index)
+            if overlapping_movies.empty:
+                predictions[movie] = np.nan
+            else:
+                weights = sim_scores[overlapping_movies]
+                ratings = rated_movies[overlapping_movies]
+                predictions[movie] = (weights @ ratings) / weights.sum()
+        return pd.Series(predictions)
+    except Exception as e:
+        st.error(f"Error in myIBCF function: {str(e)}")
+        return pd.Series()
 
 # Preprocess data
-start_time = datetime.now()
-normalized_ratings = normalize_matrix(rating_matrix)
-raw_similarity = compute_similarity(normalized_ratings)
-filtered_similarity = filter_low_counts(raw_similarity, rating_matrix)
-top_30_similarity = top_k_similarity(filtered_similarity)
-st.write(f"Data preprocessing completed in: {(datetime.now() - start_time).seconds / 60} minutes")
+try:
+    start_time = datetime.now()
+    normalized_ratings = normalize_matrix(rating_matrix)
+    raw_similarity = compute_similarity(normalized_ratings)
+    filtered_similarity = filter_low_counts(raw_similarity, rating_matrix)
+    top_30_similarity = top_k_similarity(filtered_similarity)
+    st.write(f"Data preprocessing completed in: {(datetime.now() - start_time).seconds / 60} minutes")
+except Exception as e:
+    st.error(f"Error during preprocessing: {str(e)}")
+    st.stop()
 
 # Streamlit App
 st.title("Movie Recommendation System")
@@ -106,11 +119,14 @@ new_user = new_user.replace(0, np.nan)  # Replace 0 ratings with NaN
 
 # Generate recommendations
 if st.button("Get Recommendations"):
-    start_time = datetime.now()
-    recommendations = myIBCF(new_user, top_30_similarity, max_movies=100)
-    st.write(f"Recommendations generated in: {(datetime.now() - start_time).seconds / 60} minutes")
-    st.write("Top 10 Recommendations:")
-    st.table(recommendations.nlargest(10))
+    try:
+        start_time = datetime.now()
+        recommendations = myIBCF(new_user, top_30_similarity, max_movies=100)
+        st.write(f"Recommendations generated in: {(datetime.now() - start_time).seconds / 60} minutes")
+        st.write("Top 10 Recommendations:")
+        st.table(recommendations.nlargest(10))
+    except Exception as e:
+        st.error(f"Error generating recommendations: {str(e)}")
 
 # Note on memory optimization
 st.write("""
